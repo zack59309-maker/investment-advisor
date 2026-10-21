@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>个人投资决策工作流</title>
+<style>
+  :root{
+    --bg:#0f1216; --panel:#171c22; --panel2:#1e242c; --line:#2a323c;
+    --text:#e6edf3; --dim:#93a1b0; --acc:#4c9aff; --ok:#3fb950; --warn:#d29922; --bad:#f85149;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font:14px/1.6 "Segoe UI","Microsoft YaHei",system-ui,sans-serif}
+  header{display:flex;align-items:center;gap:14px;padding:14px 20px;background:var(--panel);
+         border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;flex-wrap:wrap}
+  header h1{font-size:16px;margin:0;font-weight:600}
+  header .sp{flex:1}
+  .badge{font-size:12px;padding:2px 8px;border-radius:10px;border:1px solid var(--line);color:var(--dim)}
+  .badge.on{color:var(--ok);border-color:#1f4d29}
+  .badge.off{color:var(--warn);border-color:#4d3d13}
+  main{max-width:1240px;margin:0 auto;padding:18px 20px 60px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+  .card h2{font-size:14px;margin:0 0 12px;color:var(--dim);font-weight:600;letter-spacing:.5px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  label{color:var(--dim);font-size:13px}
+  select,input,button{font:inherit;color:var(--text);background:var(--panel2);
+        border:1px solid var(--line);border-radius:7px;padding:8px 10px}
+  input[type=number]{width:130px}
+  button{cursor:pointer;transition:.15s}
+  button:hover{border-color:var(--acc)}
+  button.primary{background:var(--acc);border-color:var(--acc);color:#08111f;font-weight:600}
+  button.primary:disabled{opacity:.5;cursor:not-allowed}
+  button.ghost{background:transparent}
+  .tiers{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:6px}
+  .tier{border:1px solid var(--line);border-radius:9px;padding:12px;cursor:pointer;background:var(--panel2)}
+  .tier.sel{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc) inset}
+  .tier b{display:block;font-size:15px;margin-bottom:4px}
+  .tier span{color:var(--dim);font-size:12.5px;display:block}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:8px 9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+  th{color:var(--dim);font-weight:600;background:var(--panel2);position:sticky;top:0}
+  td.num,th.num{text-align:right}
+  .wrap{overflow:auto;max-height:520px;border:1px solid var(--line);border-radius:8px}
+  .kv{display:flex;gap:18px;flex-wrap:wrap;color:var(--dim);font-size:13px}
+  .kv b{color:var(--text);font-weight:600}
+  .pill{display:inline-block;padding:1px 7px;border-radius:9px;font-size:12px;background:var(--panel2);border:1px solid var(--line)}
+  .pill.ok{color:var(--ok);border-color:#1f4d29}
+  .pill.bad{color:var(--bad);border-color:#4d1f1f}
+  pre{white-space:pre-wrap;word-break:break-word;background:var(--panel2);border:1px solid var(--line);
+      border-radius:8px;padding:12px;max-height:560px;overflow:auto;font-size:13px}
+  .log{font-family:Consolas,monospace;font-size:12.5px;color:var(--dim);max-height:200px;overflow:auto;
+       background:#12161b;border:1px solid var(--line);border-radius:8px;padding:10px}
+  .mut{color:var(--dim)}
+  .hide{display:none}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:900px){.grid2{grid-template-columns:1fr}}
+  dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;
+         padding:18px;width:min(560px,92vw)}
+  dialog::backdrop{background:#000a}
+  .note{font-size:12.5px;color:var(--warn)}
+</style>
+</head>
+<body>
+<header>
+  <h1>📈 个人投资决策工作流</h1>
+  <span class="badge" id="aiBadge">AI：未知</span>
+  <span class="badge" id="tempBadge">市场温度：—</span>
+  <span class="sp"></span>
+  <button class="ghost" id="btnReports">历史报告</button>
+  <button class="ghost" id="btnSettings">设置</button>
+</header>
+
+<main>
+  <!-- 参数区 -->
+  <div class="card">
+    <h2>1 · 选择风险档位</h2>
+    <div class="tiers" id="tiers"></div>
+    <div class="row" style="margin-top:14px">
+      <label>本金（元）</label>
+      <input type="number" id="capital" value="100000" step="10000" min="1000">
+      <label><input type="checkbox" id="useHoldings" checked> 使用持仓调仓</label>
+      <label><input type="checkbox" id="sellUnknown" checked> 清仓不在候选池的持仓</label>
+      <label><input type="checkbox" id="withBacktest"> 同时跑回测（慢，约 1 分钟）</label>
+      <button class="primary" id="btnRun">开始分析</button>
+      <button class="ghost" id="btnBacktest">只跑回测</button>
+      <span class="mut" id="runHint"></span>
+    </div>
+    <div class="log hide" id="progress" style="margin-top:12px"></div>
+  </div>
+
+  <!-- 持仓区 -->
+  <div class="card">
+    <h2>2 · 我的持仓（录一次，之后自动算调仓）</h2>
+    <div class="row">
+      <label>可用现金（元）</label>
+      <input type="number" id="cashInput" value="0" step="1000" min="0">
+      <button class="primary" id="btnSaveHoldings">保存持仓</button>
+      <button class="ghost" id="btnRefreshHoldings">刷新估值</button>
+      <button class="ghost" id="btnAddRow">+ 添加一行</button>
+      <span class="mut" id="holdingsHint">未录入</span>
+    </div>
+    <div class="wrap" style="margin-top:10px;max-height:320px">
+      <table id="tblEditHoldings"></table>
+    </div>
+    <div class="kv" id="holdingsSummary" style="margin-top:10px"></div>
+  </div>
+
+  <!-- 结果区 -->
+  <div id="results" class="hide">
+    <div class="card">
+      <h2>2 · 概览</h2>
+      <div class="kv" id="overview"></div>
+      <div id="notesBox" class="hide" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card">
+      <div class="card hide" id="cardPositions">
+        <h2>3 · 当前持仓</h2>
+        <div class="wrap"><table id="tblPositions"></table></div>
+      </div>
+
+      <div class="card hide" id="cardRebalance">
+        <h2>4 · 调仓清单（按此挂单）</h2>
+        <div id="rebalanceWarn" class="note hide" style="margin-bottom:8px"></div>
+        <div class="wrap"><table id="tblRebalance"></table></div>
+      </div>
+
+      <div class="card" id="cardBuy">
+        <h2>5 · 目标组合（调仓后 / 新建仓）</h2>
+        <div class="wrap"><table id="tblHoldings"></table></div>
+      </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h2>6 · 资产配置（目标 vs 实际）</h2>
+        <div class="wrap" style="max-height:260px"><table id="tblAlloc"></table></div>
+      </div>
+      <div class="card">
+        <h2>7 · 执行清单</h2>
+        <div class="wrap" style="max-height:260px"><table id="tblActions"></table></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>8 · AI 风险复核（DeepSeek）</h2>
+      <div class="row">
+        <button class="primary" id="btnAI">让 AI 挑刺</button>
+        <button class="ghost" id="btnPrompt">只复制 prompt（自己贴给任意模型）</button>
+        <label><input type="checkbox" id="saveAI"> 结果另存为报告文件</label>
+        <span class="mut" id="aiHint"></span>
+      </div>
+      <pre id="aiOut" class="hide" style="margin-top:12px"></pre>
+    </div>
+
+    <div class="card">
+      <h2>9 · 完整日报 / 备选池</h2>
+      <div class="row" style="margin-bottom:10px">
+        <button class="ghost" id="btnTabMd">完整 Markdown 日报</button>
+        <button class="ghost" id="btnTabPicks">备选池（前 10）</button>
+        <button class="ghost" id="btnTabBt">回测结果</button>
+      </div>
+      <div id="paneMd" class="hide"><pre id="mdOut"></pre></div>
+      <div id="panePicks" class="hide"></div>
+      <div id="paneBt" class="hide"><pre id="btOut"></pre></div>
+    </div>
+  </div>
+</main>
+
+<dialog id="dlgSettings">
+  <h2 style="margin-top:0">设置</h2>
+  <p class="mut" style="font-size:13px">API Key 只保存在本机 <code>data/settings.json</code>，仅用于你点"让 AI 挑刺"时调用 DeepSeek。
+  也可以改用环境变量 <code>DEEPSEEK_API_KEY</code>。</p>
+  <div class="row"><label style="width:120px">API Key</label><input id="setKey" style="flex:1" placeholder="sk-..."></div>
+  <div class="row" style="margin-top:8px"><label style="width:120px">Base URL</label><input id="setBase" style="flex:1"></div>
+  <div class="row" style="margin-top:8px"><label style="width:120px">模型</label>
+    <select id="setModel">
+      <option value="deepseek-chat">deepseek-chat（快、便宜）</option>
+      <option value="deepseek-reasoner">deepseek-reasoner（慢、推理强）</option>
+    </select>
+  </div>
+  <div class="row" style="margin-top:14px;justify-content:flex-end">
+    <button class="ghost" id="setCancel">取消</button>
+    <button class="primary" id="setSave">保存</button>
+  </div>
+</dialog>
+
+<dialog id="dlgReports">
+  <h2 style="margin-top:0">历史报告</h2>
+  <div id="reportList" class="wrap" style="max-height:50vh"></div>
+  <div class="row" style="margin-top:12px;justify-content:flex-end"><button class="ghost" id="repClose">关闭</button></div>
+</dialog>
+
+<script>
+const $ = s => document.querySelector(s);
+const state = { tier:'balanced', capital:100000, result:null, status:null, taskTimer:null };
+const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = (v,d=2) => (v==null||v===''||Number.isNaN(v)) ? '—' : (typeof v==='number' ? v.toFixed(d) : v);
+
+async function api(path, body){
+  const opt = body ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)} : {};
+  const r = await fetch(path, opt);
+  return await r.json();
+}
+
+/* ---------------- 初始化 ---------------- */
+async function boot(){
+  const st = await api('/api/status');
+  state.status = st;
+  renderTiers(st);
+  $('#capital').value = st.defaults.capital;
+  state.capital = st.defaults.capital;
+  setTier(st.defaults.tier);
+  setAiBadge(st.ai_ready, st.key_masked, st.model);
+}
+
+function setAiBadge(ready, masked, model){
+  const b = $('#aiBadge');
+  b.className = 'badge ' + (ready ? 'on' : 'off');
+  b.textContent = ready ? `AI：已配置 ${masked||''} · ${model||''}` : 'AI：未配置 Key（点设置）';
+}
+
+function renderTiers(st){
+  const box = $('#tiers'); box.innerHTML='';
+  for (const [key,t] of Object.entries(st.tiers)){
+    const d = document.createElement('div');
+    d.className = 'tier'; d.dataset.tier = key;
+    d.innerHTML = `<b>${esc(t.name)}</b><span>${esc(t.desc)}</span>
+      <span style="margin-top:6px">目标 ${esc(t.target_return)} · 回撤容忍 ${esc(t.max_drawdown)}</span>
+      <span>调仓：${esc(t.rebalance)}</span>`;
+    d.onclick = () => setTier(key);
+    box.appendChild(d);
+  }
+}
+function setTier(k){ state.tier=k; document.querySelectorAll('.tier').forEach(e=>e.classList.toggle('sel', e.dataset.tier===k)); }
+
+/* ---------------- 运行分析 ---------------- */
+function showProgress(){
+  $('#progress').classList.remove('hide');
+  $('#progress').textContent = '';
+}
+function pollTask(tid, onDone){
+  clearInterval(state.taskTimer);
+  state.taskTimer = setInterval(async () => {
+    const t = await api('/api/task/'+tid);
+    if (t.progress){ $('#progress').textContent = t.progress.join('\n'); $('#progress').scrollTop = 1e6; }
+    if (t.status === 'done'){ clearInterval(state.taskTimer); onDone(null, t.result); }
+    else if (t.status === 'failed'){ clearInterval(state.taskTimer); onDone(t.error || '未知错误'); }
+  }, 900);
+}
+function setBusy(b){ $('#btnRun').disabled=b; $('#btnBacktest').disabled=b; $('#runHint').textContent = b ? '运行中…' : ''; }
+
+$('#btnRun').onclick = async () => {
+  state.capital = Number($('#capital').value)||100000;
+  const withBt = $('#withBacktest').checked;
+  const mode = $('#useHoldings').checked ? 'auto' : 'build';
+  const sellUnknown = $('#sellUnknown').checked;
+  setBusy(true); showProgress(); $('#progress').textContent='提交任务…';
+  const {task} = await api('/api/advise', {tier:state.tier, capital:state.capital, with_backtest:withBt, mode, sell_unknown:sellUnknown});
+  pollTask(task, (err, res) => {
+    setBusy(false);
+    if (err){ $('#progress').textContent += '\n❌ ' + err; return; }
+    state.result = res; renderResult(res);
+  });
+};
+
+$('#btnBacktest').onclick = async () => {
+  setBusy(true); showProgress(); $('#progress').textContent='回测中…';
+  const {task} = await api('/api/backtest', {tier:state.tier, start:'2016-01-01'});
+  pollTask(task, (err,res) => {
+    setBusy(false);
+    if (err){ $('#progress').textContent += '\n❌ ' + err; return; }
+    $('#btOut').textContent = btToText(res);
+    showPane('bt');
+    if (state.result){ state.result.benchmark = res; }
+  });
+};
+
+/* ---------------- 渲染结果 ---------------- */
+function table(el, cols, rows){
+  const t = $(el);
+  t.innerHTML = '<thead><tr>' + cols.map(c=>`<th class="${c.num?'num':''}">${esc(c.t)}</th>`).join('') + '</tr></thead>'
+    + '<tbody>' + rows.map(r => '<tr>' + cols.map(c=>{
+        const v = c.f ? c.f(r[c.k], r) : r[c.k];
+        return `<td class="${c.num?'num':''}">${v==null?'—':esc(v)}</td>`;
+      }).join('') + '</tr>').join('') + '</tbody>';
+}
+
+function renderResult(res){
+  $('#results').classList.remove('hide');
+  const m = res.macro||{}, tp = res.temp||{};
+  $('#overview').innerHTML = `
+    <span>档位 <b>${esc(res.tier_name)}</b></span>
+    <span>本金 <b>${fmt(res.capital,0)}</b></span>
+    <span>已配置 <b>${res.invested_pct??'—'}%</b></span>
+    <span>现金 <b>${res.cash_pct??'—'}%</b>（参考收益 ${fmt(res.cash_yield)}%）</span>
+    <span>市场温度 <b>${esc(tp.temp||'—')}</b>（沪深300 PE ${tp.hs300_pe??'—'}，分位 ${tp.hs300_pe_pct??'—'}%）</span>
+    <span>10年国债 <b>${m.cn_10y??'—'}%</b></span>
+    ${m.lpr_1y?`<span>LPR 1Y <b>${m.lpr_1y}%</b></span>`:''}
+    <span>报告 <b>${esc((res.report_path||'').split('\\\\').pop())}</b></span>`;
+  const nb = $('#notesBox');
+  if (res.notes && res.notes.length){
+    nb.classList.remove('hide');
+    nb.innerHTML = '<div class="note">⚠️ 今日无标的/标的不足的原因（资金留现金是纪律）</div>'
+      + '<ul style="margin:6px 0 0 18px;color:var(--dim)">' + res.notes.map(n=>`<li>${esc(n)}</li>`).join('') + '</ul>';
+  } else nb.classList.add('hide');
+
+  table('#tblHoldings', [
+    {k:'类别',t:'类别'},{k:'代码',t:'代码'},{k:'名称',t:'名称'},
+    {k:'最新价',t:'最新价',num:1,f:v=>fmt(v,3)},
+    {k:'买入挂单价',t:'买入挂单价',num:1,f:v=>fmt(v,3)},
+    {k:'买入数量',t:'数量',num:1,f:v=>fmt(v,0)},
+    {k:'买入金额',t:'金额',num:1,f:v=>fmt(v,0)},
+    {k:'实际权重',t:'占比'},
+    {k:'止损价',t:'止损',num:1,f:v=>fmt(v,3)},
+    {k:'止盈价',t:'止盈',num:1,f:v=>fmt(v,3)},
+    {k:'评分',t:'评分',num:1,f:v=>fmt(v,1)},
+  ], res.holdings||[]);
+
+  const w = res.weights||{};
+  const cn = {etf:'ETF', cb:'可转债', dividend:'红利价值股', growth:'成长/主题股', cash:'现金/货基'};
+  const allocMap = {}; (res.allocation||[]).forEach(a => allocMap[a['类别']]=a['买入金额']);
+  const total = (res.capital||1);
+  table('#tblAlloc', [
+    {k:'k',t:'资产类别'},
+    {k:'tgt',t:'目标权重',num:1},
+    {k:'act',t:'实际权重',num:1},
+    {k:'amt',t:'金额',num:1,f:v=>fmt(v,0)},
+  ], Object.keys(cn).map(k => ({
+    k: cn[k],
+    tgt: ((w[k]||0)*100).toFixed(1)+'%',
+    act: (((allocMap[cn[k]]||0)/total)*100).toFixed(1)+'%',
+    amt: allocMap[cn[k]]||0,
+  })));
+
+  table('#tblActions', [
+    {k:'优先级',t:'优先级'},{k:'动作',t:'动作'},{k:'标的',t:'标的'},
+    {k:'指令',t:'指令'},{k:'触发条件',t:'触发条件'},
+  ], res.actions||[]);
+
+  // 备选池
+  const names = {cb:'可转债', etf:'ETF', dividend:'红利价值股', growth:'成长/主题股'};
+  let ph = '';
+  for (const [k, rows] of Object.entries(res.picks||{})){
+    if (!rows.length) continue;
+    const cols = Object.keys(rows[0]).slice(0, 9);
+    ph += `<h3 style="font-size:13px;color:var(--dim)">${names[k]||k}</h3><div class="wrap" style="max-height:300px"><table>`
+      + '<thead><tr>' + cols.map(c=>`<th>${esc(c)}</th>`).join('') + '</tr></thead><tbody>'
+      + rows.map(r=>'<tr>'+cols.map(c=>`<td>${esc(typeof r[c]==='number'? (Math.abs(r[c])<1000? r[c].toFixed(2): r[c].toFixed(0)) : r[c])}</td>`).join('')+'</tr>').join('')
+      + '</tbody></table></div>';
+  }
+  $('#panePicks').innerHTML = ph || '<span class="mut">无</span>';
+  $('#mdOut').textContent = res.report_md || '（未找到日报文件）';
+  $('#aiOut').classList.add('hide'); $('#aiHint').textContent='';
+  showPane('md');
+}
+
+function btToText(bt){
+  if (!bt || !bt['对比']) return '无回测结果';
+  let s = '【当前档位参数 vs 沪深300】\n';
+  bt['对比'].forEach(r => s += `  ${String(r['指标']).padEnd(16)} 策略 ${String(r['策略']??'').padEnd(20)} 基准 ${r['基准']??''}\n`);
+  s += '\n【参数稳健性扫描（按夏普排序）】\n';
+  const cols = Object.keys((bt['扫描']||[{}])[0]||{});
+  s += '  ' + cols.map(c=>c.padEnd(10)).join('') + '\n';
+  (bt['扫描']||[]).forEach(r => s += '  ' + cols.map(c=>String(r[c]??'').padEnd(10)).join('') + '\n');
+  return s;
+}
+function showPane(which){
+  ['md','picks','bt'].forEach(p => $('#pane'+p[0].toUpperCase()+p.slice(1)).classList.toggle('hide', p!==which));
+}
+$('#btnTabMd').onclick=()=>showPane('md');
+$('#btnTabPicks').onclick=()=>showPane('picks');
+$('#btnTabBt').onclick=()=>showPane('bt');
+
+/* ---------------- AI 复核 ---------------- */
+$('#btnAI').onclick = async () => {
+  if (!state.result){ alert('请先运行一次分析'); return; }
+  const btn = $('#btnAI'); btn.disabled = true;
+  $('#aiOut').classList.remove('hide');
+  $('#aiOut').textContent = '调用 DeepSeek 中，请稍候…（约 10~60 秒）';
+  $('#aiHint').textContent = '';
+  const r = await api('/api/ai-review', {result: state.result, save_as_report: $('#saveAI').checked});
+  btn.disabled = false;
+  if (!r.ok){ $('#aiOut').textContent = '❌ ' + r.error; return; }
+  $('#aiOut').textContent = r.text;
+  $('#aiHint').textContent = `模型 ${r.model} · 耗时 ${r.elapsed}s` + (r.saved ? ` · 已保存 ${r.saved.split('\\\\').pop()}` : '');
+};
+$('#btnPrompt').onclick = async () => {
+  if (!state.result){ alert('请先运行一次分析'); return; }
+  const r = await api('/api/ai-prompt', {result: state.result});
+  if (!r.ok){ alert(r.error); return; }
+  try { await navigator.clipboard.writeText(r.prompt); $('#aiHint').textContent='prompt 已复制到剪贴板'; }
+  catch(e){ $('#aiOut').classList.remove('hide'); $('#aiOut').textContent = r.prompt; }
+};
+
+/* ---------------- 设置 / 历史报告 ---------------- */
+$('#btnSettings').onclick = () => {
+  const s = state.status||{};
+  $('#setKey').value = ''; $('#setKey').placeholder = s.ai_ready ? '已设置（留空则不修改）' : 'sk-...';
+  $('#setBase').value = s.base_url || 'https://api.deepseek.com';
+  $('#setModel').value = s.model || 'deepseek-chat';
+  $('#dlgSettings').showModal();
+};
+$('#setCancel').onclick = () => $('#dlgSettings').close();
+$('#setSave').onclick = async () => {
+  const patch = {deepseek_base_url: $('#setBase').value.trim(), deepseek_model: $('#setModel').value};
+  const k = $('#setKey').value.trim();
+  if (k) patch.deepseek_api_key = k;
+  const r = await api('/api/settings', patch);
+  setAiBadge(r.ai_ready, r.key_masked, patch.deepseek_model);
+  $('#dlgSettings').close();
+};
+
+$('#btnReports').onclick = async () => {
+  const st = await api('/api/status');
+  const box = $('#reportList');
+  box.innerHTML = (st.reports||[]).map(n =>
+    `<div style="padding:8px 10px;border-bottom:1px solid var(--line)">
+       <a href="#" data-n="${esc(n)}" style="color:var(--acc)">${esc(n)}</a>
+       <a href="/api/download?name=${encodeURIComponent(n)}" style="float:right;color:var(--dim)">下载</a>
+     </div>`).join('') || '<div class="mut" style="padding:10px">暂无报告</div>';
+  box.querySelectorAll('a[data-n]').forEach(a => a.onclick = async ev => {
+    ev.preventDefault();
+    const r = await api('/api/report?name=' + encodeURIComponent(a.dataset.n));
+    $('#results').classList.remove('hide');
+    $('#mdOut').textContent = r.md || '';
+    showPane('md');
+    $('#dlgReports').close();
+    $('#results').scrollIntoView({behavior:'smooth'});
+  });
+  $('#dlgReports').showModal();
+};
+$('#repClose').onclick = () => $('#dlgReports').close();
+
+boot();
+</script>
+<script src="/static/holdings.js"></script>
+</body>
+</html>
