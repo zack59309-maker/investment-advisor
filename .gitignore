@@ -1,0 +1,29 @@
+# runtime data (never commit)
+data/
+reports/
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# secrets
+.env
+.env.*
+*.key
+*.pem
+
+# editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# one-off probe outputs
+err.txt
+out.txt
+cb_screen_result.csv
+probe_result*.md
+probe_sources*.py
